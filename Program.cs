@@ -14,25 +14,16 @@ namespace DrakiaXYZ_MapInfoExtractor
 
         static void Main(string[] args)
         {
-            // First, extract "globalmanagers/BuildSettings" from "EscapeFromTarkov_Data\globalgamemanagers" into "Extract" (This should end up in a folder called "globalgamemanagers")
-            // Second, extract all of the map preset bundles from "EscapeFromTarkov_Data\StreamingAssets\Windows\maps" into "Extract". The script will look for the first folder containing ".bundle" in its name
-            string outputDir = ".\\Extract";
+            // First, extract all of the map preset bundles from "EscapeFromTarkov_Data\StreamingAssets\Windows\maps" into "Extract"
+            // Second, extract "globalmanagers/BuildSettings" from "EscapeFromTarkov_Data\globalgamemanagers" into "Extract\ExportedProject\ProjectSettings"
+            string outputDir = Path.Combine(".", "Extract");
             if (!buildSceneLookup(outputDir))
             {
                 return;
             }
-
-            // Find the bundle dir, and parse it
-            foreach (string dir in Directory.GetDirectories(outputDir))
+            if (!parseBundles(outputDir))
             {
-                if (!dir.Contains(".bundle")) continue;
-
-                if (!parseBundles(dir))
-                {
-                    return;
-                }
-
-                break;
+                return;
             }
 
             File.WriteAllText("maps.json", JsonConvert.SerializeObject(_mapScenes, Formatting.Indented));
@@ -43,22 +34,19 @@ namespace DrakiaXYZ_MapInfoExtractor
 
         static bool buildSceneLookup(string outputDir)
         {
-            // Create a mapping of scene -> id from ExportedProject\ProjectSettings\EditorBuildSettings.asset
-            string buildSettingsPath = $"{outputDir}\\globalgamemanagers\\ExportedProject\\ProjectSettings\\EditorBuildSettings.asset";
+            // Create a mapping of scene -> id from ExportedProject\ProjectSettings\BuildSettings.asset
+            string buildSettingsPath = Path.Combine(outputDir, "ExportedProject", "ProjectSettings", "BuildSettings.asset");
             dynamic? buildSettings = loadYamlAsDynamic(buildSettingsPath);
             if (buildSettings == null)
             {
-                Console.Error.WriteLine("Error loading EditorBuildSettings.asset");
+                Console.Error.WriteLine("Error loading BuildSettings.asset");
                 return false;
             }
 
-            for (int i = 0; i < buildSettings.EditorBuildSettings.m_Scenes.Count; i++)
+            for (int i = 0; i < buildSettings.BuildSettings.scenes.Count; i++)
             {
-                dynamic scene = buildSettings.EditorBuildSettings.m_Scenes[i];
-                if (!_sceneLookup.ContainsKey(scene.path))
-                {
-                    _sceneLookup.Add(scene.path, i);
-                }
+                string scene = buildSettings.BuildSettings.scenes[i];
+                _sceneLookup.TryAdd(scene, i);
             }
 
             return true;
@@ -71,7 +59,7 @@ namespace DrakiaXYZ_MapInfoExtractor
                 return false;
             }
 
-            string presetDir = $"{bundleDir}\\ExportedProject\\Assets\\Content\\Locations\\_Presets";
+            string presetDir = Path.Combine(bundleDir, "ExportedProject", "Assets", "Content", "Locations", "_Presets");
             List<string> assetList;
             if (!parsePresetDir(presetDir, out assetList))
             {
@@ -83,7 +71,7 @@ namespace DrakiaXYZ_MapInfoExtractor
 
         static bool buildPresetCache(string bundleDir)
         {
-            string monoBehaviourDir = $"{bundleDir}\\ExportedProject\\Assets\\MonoBehaviour";
+            string monoBehaviourDir = Path.Combine(bundleDir, "ExportedProject", "Assets", "MonoBehaviour");
             foreach (string file in Directory.GetFiles(monoBehaviourDir))
             {
                 if (!file.EndsWith(".asset")) continue;
